@@ -2,25 +2,36 @@ import * as core from '@actions/core';
 
 import { requireNonEmptyStringInput } from './utils';
 import { ArgoCDClient } from './argocd';
+import { type Application } from './argocd/models/argocd/Application';
 import { HealthStatus } from './argocd/models/argocd/HealthStatus';
 import {
   printHealth,
   printResourceEvents,
   printPodContainerLogs
 } from './print';
+import { ResourceTree } from './argocd/models/argocd/ResourceTree';
+
 
 const appName = requireNonEmptyStringInput('app-name');
 const serverUrl = requireNonEmptyStringInput('server-url');
 const userLogin = requireNonEmptyStringInput('user-login');
 const userPassword = requireNonEmptyStringInput('user-password');
 
+
 const main = async () => {
   const argocd = new ArgoCDClient(serverUrl);
   await argocd.authenticate(userLogin, userPassword);
   
-  const app = await argocd.getApplication(appName);
+  let app: Application;
   
-  printHealth(`Application ${appName}`, app.status.health);
+  try {
+    app = await argocd.getApplication(appName);
+  } catch (error) {
+    core.setFailed(`Error fetching application ${appName}: ${error}`);
+    return;
+  }
+  
+  await printHealth(`Application ${appName}`, app.status.health);
   if (app.status.health.status !== HealthStatus.Healthy) {
 
     // app.status.resources.forEach(async (resource) => {
@@ -29,7 +40,15 @@ const main = async () => {
     //   }
     // });
 
-    const tree = await argocd.getApplicationResourceTree(appName);
+    let tree: ResourceTree;
+
+    try {
+      tree = await argocd.getApplicationResourceTree(appName);
+    } catch (error) {
+      core.setFailed(`Error fetching application resource tree for ${appName}: ${error}`);
+      return;
+    }
+
     for (const node of tree.nodes) {
       if (node.health && node.health.status !== HealthStatus.Healthy) {
         await printHealth(`${node.kind} ${node.name}`, node.health);

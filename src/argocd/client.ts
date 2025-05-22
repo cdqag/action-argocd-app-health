@@ -8,6 +8,24 @@ import { type LogLine } from './models/argocd/LogLine';
 import { type LogEntry } from "./models/argocd/LogEntry";
 import { type Container } from "./models/k8s/Container";
 
+export class RequestError extends Error {
+  method: string;
+  url: string;
+  statusCode: number;
+
+  constructor(method: string, url: string, statusCode: number, message: string) {
+    super(message);
+    this.method = method;
+    this.url = url;
+    this.statusCode = statusCode;
+    this.name = 'RequestError';
+  }
+
+  toString() {
+    return `Request ${this.method} to ${this.url} has returned status code ${this.statusCode}. ${this.message}`;
+  }
+}
+
 export class ArgoCDClient {
   private baseUrl: string;
   private token: string;
@@ -46,19 +64,19 @@ export class ArgoCDClient {
 
     const response = await fetch(url, { method, headers, body });
     if (!response.ok) {
+      response.status
       let errorMsg = response.statusText;
       
       try {
         const errorData = await response.json();
         if (errorData && errorData.error && errorData.message) {
-          errorMsg = `${errorData.error} --> ${errorData.message}`;
+          errorMsg = `${errorData.error}: ${errorData.message}`;
         }
       } catch (e) {
         // Ignore JSON parsing error
       }
 
-      console.error(`${method} request to ${url.toString()} failed: ${errorMsg}`);
-      process.exit(ExitCode.Failure);
+      throw new RequestError(method, url.toString(), response.status, errorMsg);
     }
 
     return response;
@@ -70,10 +88,16 @@ export class ArgoCDClient {
    * @param password 
    */
   async authenticate(username: string, password: string): Promise<void> {
-    const response = await this.sendRequest('POST', 'session', undefined, {
-      username,
-      password
-    });
+    let response;
+    try {
+      response = await this.sendRequest('POST', 'session', undefined, {
+        username,
+        password
+      });
+    } catch (error) {
+      console.error(`Authentication failed: ${error}`);
+      process.exit(ExitCode.Failure);
+    }
     
     const data = await response.json();
     if (!data.token) {
@@ -176,8 +200,7 @@ export class ArgoCDClient {
     });
     
     if (!data.manifest) {
-      console.error(`No manifest found for resource ${podName} in namespace ${podNamespace}`);
-      process.exit(ExitCode.Failure);
+      throw new Error(`No manifest found for resource ${podName} in namespace ${podNamespace}`);
     }
 
     const manifest = JSON.parse(data.manifest);
@@ -235,6 +258,10 @@ export class ArgoCDClient {
         logs.push(logLine.result);
       }
     });
+
+    if (logs.length === 1 && logs[0].content === "") {
+      logs.length = 0;
+    }
 
     return logs;
   }

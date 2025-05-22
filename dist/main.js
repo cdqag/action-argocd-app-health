@@ -17089,6 +17089,21 @@ const requireNonEmptyStringInput = (name) => {
 
 //#endregion
 //#region src/argocd/client.ts
+var RequestError = class extends Error {
+	method;
+	url;
+	statusCode;
+	constructor(method, url, statusCode, message) {
+		super(message);
+		this.method = method;
+		this.url = url;
+		this.statusCode = statusCode;
+		this.name = "RequestError";
+	}
+	toString() {
+		return `Request ${this.method} to ${this.url} has returned status code ${this.statusCode}. ${this.message}`;
+	}
+};
 var ArgoCDClient = class {
 	baseUrl;
 	token;
@@ -17122,13 +17137,13 @@ var ArgoCDClient = class {
 			body
 		});
 		if (!response.ok) {
+			response.status;
 			let errorMsg = response.statusText;
 			try {
 				const errorData = await response.json();
-				if (errorData && errorData.error && errorData.message) errorMsg = `${errorData.error} --> ${errorData.message}`;
+				if (errorData && errorData.error && errorData.message) errorMsg = `${errorData.error}: ${errorData.message}`;
 			} catch (e) {}
-			console.error(`${method} request to ${url.toString()} failed: ${errorMsg}`);
-			process.exit(import_core.ExitCode.Failure);
+			throw new RequestError(method, url.toString(), response.status, errorMsg);
 		}
 		return response;
 	}
@@ -17138,10 +17153,16 @@ var ArgoCDClient = class {
 	* @param password 
 	*/
 	async authenticate(username, password) {
-		const response = await this.sendRequest("POST", "session", void 0, {
-			username,
-			password
-		});
+		let response;
+		try {
+			response = await this.sendRequest("POST", "session", void 0, {
+				username,
+				password
+			});
+		} catch (error$1) {
+			console.error(`Authentication failed: ${error$1}`);
+			process.exit(import_core.ExitCode.Failure);
+		}
 		const data = await response.json();
 		if (!data.token) {
 			console.error("Authentication failed: No token received.");
@@ -17217,10 +17238,7 @@ var ArgoCDClient = class {
 			version: "v1",
 			resourceName: podName
 		});
-		if (!data.manifest) {
-			console.error(`No manifest found for resource ${podName} in namespace ${podNamespace}`);
-			process.exit(import_core.ExitCode.Failure);
-		}
+		if (!data.manifest) throw new Error(`No manifest found for resource ${podName} in namespace ${podNamespace}`);
 		const manifest = JSON.parse(data.manifest);
 		return manifest;
 	}
@@ -17257,6 +17275,7 @@ var ArgoCDClient = class {
 			const logLine = JSON.parse(line);
 			if (!logLine.result.last) logs.push(logLine.result);
 		});
+		if (logs.length === 1 && logs[0].content === "") logs.length = 0;
 		return logs;
 	}
 };
@@ -17329,7 +17348,12 @@ const annotateWithMatchingInterpreter = (line) => {
 
 //#endregion
 //#region src/print.ts
-const ERROR_EVENT_RESON_REGEXP = /Error|Fail|Exception|Not|Timeout|BackOff/;
+const ERROR_EVENT_RESON_REGEXP = /Error|Fail|Exception|Not|Timeout|BackOff|Unhealthy/;
+/**
+* Prints the health status of an entity (e.g. application, resource, etc.)
+* @param entityName 
+* @param health 
+*/
 const printHealth = (entityName, health) => {
 	let msg = `${entityName} is in ${health.status} state`;
 	if (health.message) msg += ` because: ${health.message}`;
@@ -17354,8 +17378,29 @@ const printHealth = (entityName, health) => {
 		import_core.warning(msg);
 	}
 };
+/**
+* Prints the events of a resource in an ArgoCD application
+* @param argocd 
+* @param appName 
+* @param resourceKind 
+* @param resourceNamespace 
+* @param resourceUID 
+* @param resourceName 
+*/
 const printResourceEvents = async (argocd, appName$1, resourceKind, resourceNamespace, resourceUID, resourceName) => {
-	const events$2 = await argocd.getApplicationResourceEvents(appName$1, resourceNamespace, resourceUID, resourceName);
+	let events$2;
+	try {
+		events$2 = await argocd.getApplicationResourceEvents(appName$1, resourceNamespace, resourceUID, resourceName);
+	} catch (error$1) {
+		if (error$1 instanceof RequestError) {
+			if (error$1.statusCode === 403) {
+				import_core.warning(`You don't have permission to access the events for ${resourceKind} ${resourceName}`);
+				return;
+			}
+		}
+		import_core.warning(`Couldn't fetch events for ${resourceKind} ${resourceName}: ${error$1}`);
+		return;
+	}
 	if (events$2.items && events$2.items.length > 0) {
 		console.log(`  ↘️ ${resourceKind} ${resourceName} has the following events:`);
 		for (const e of events$2.items) {
@@ -17367,13 +17412,35 @@ const printResourceEvents = async (argocd, appName$1, resourceKind, resourceName
 		}
 	} else console.log(`  ℹ️ ${resourceKind} ${resourceName} has no events`);
 };
+/**
+* Prints the logs of a container in a pod in an ArgoCD application
+* @param argocd 
+* @param appName 
+* @param podNamespace 
+* @param podName 
+* @param containerName 
+*/
 const printPodContainerLogs = async (argocd, appName$1, podNamespace, podName, containerName) => {
-	const logs = await argocd.getApplicationPodContainerLogs(appName$1, podNamespace, podName, containerName);
+	let logs;
+	try {
+		logs = await argocd.getApplicationPodContainerLogs(appName$1, podNamespace, podName, containerName);
+	} catch (error$1) {
+		if (error$1 instanceof RequestError) {
+			if (error$1.statusCode === 403) {
+				import_core.warning(`You don't have permission to access the logs for Pod's ${podName} container ${containerName}`);
+				return;
+			}
+		}
+		import_core.warning(`Couldn't fetch logs for Pod's ${podName} container ${containerName}: ${error$1}`);
+		return;
+	}
 	if (logs.length > 0) {
 		console.log(`      ↘️ Logs:`);
 		for (const log of logs) {
 			console.log(`        ${log.content}`);
-			annotateWithMatchingInterpreter(log.content);
+			try {
+				annotateWithMatchingInterpreter(log.content);
+			} catch (error$1) {}
 		}
 	} else console.info(`      ℹ️ No logs found`);
 };
@@ -17387,10 +17454,22 @@ const userPassword = requireNonEmptyStringInput("user-password");
 const main = async () => {
 	const argocd = new ArgoCDClient(serverUrl);
 	await argocd.authenticate(userLogin, userPassword);
-	const app = await argocd.getApplication(appName);
-	printHealth(`Application ${appName}`, app.status.health);
+	let app;
+	try {
+		app = await argocd.getApplication(appName);
+	} catch (error$1) {
+		import_core.setFailed(`Error fetching application ${appName}: ${error$1}`);
+		return;
+	}
+	await printHealth(`Application ${appName}`, app.status.health);
 	if (app.status.health.status !== HealthStatus.Healthy) {
-		const tree = await argocd.getApplicationResourceTree(appName);
+		let tree;
+		try {
+			tree = await argocd.getApplicationResourceTree(appName);
+		} catch (error$1) {
+			import_core.setFailed(`Error fetching application resource tree for ${appName}: ${error$1}`);
+			return;
+		}
 		for (const node of tree.nodes) if (node.health && node.health.status !== HealthStatus.Healthy) {
 			await printHealth(`${node.kind} ${node.name}`, node.health);
 			await printResourceEvents(argocd, appName, node.kind, node.namespace, node.uid, node.name);
