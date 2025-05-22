@@ -1,2 +1,3 @@
-# action-argocd-app-health
-GitHub Action to check ArgoCD application health
+# ArgoCD Application Health Check
+
+TODO

@@ -1,0 +1,46 @@
+{
+  "name": "action-log-parser",
+  "version": "0.1.0",
+  "description": "Action Log Parser",
+  "main": "",
+  "scripts": {
+    "lint": "eslint 'src/**.ts'",
+    "test": "jest",
+    "build": "rolldown src/main.ts -d dist -f cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/cdqag/action-log-parser.git"
+  },
+  "keywords": [
+    "action",
+    "logs",
+    "log-parser",
+    "github-action"
+  ],
+  "author": "Marek Sierociński <marek.sierocinski@cdq.com>",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/cdqag/action-log-parser/issues"
+  },
+  "homepage": "https://github.com/cdqag/action-log-parser#readme",
+  "dependencies": {
+    "@actions/core": "^1.11.1"
+  },
+  "devDependencies": {
+    "@swc-node/core": "^1.13.3",
+    "@swc-node/jest": "^1.8.12",
+    "@swc/helpers": "^0.5.15",
+    "@swc/jest": "^0.2.37",
+    "@types/jest": "^29.5.14",
+    "@typescript-eslint/eslint-plugin": "^8.0.1",
+    "@typescript-eslint/parser": "^8.0.1",
+    "eslint": "^9.8.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
+    "prettier": "^3.3.3",
+    "rolldown": "^1.0.0-beta.3"
+  }
+}
