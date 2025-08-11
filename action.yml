@@ -23,6 +23,14 @@ inputs:
     description: 'User password'
     required: true
 
+  fail-on-unhealthy:
+    description: 'Fail the action if the application is unhealthy'
+    default: 'false'
+
+outputs:
+  app-health:
+    description: 'Health status of the application'
+
 runs:
   using: node20
   main: dist/main.js

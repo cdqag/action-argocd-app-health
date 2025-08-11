@@ -16,6 +16,7 @@ const appName = requireNonEmptyStringInput('app-name');
 const serverUrl = requireNonEmptyStringInput('server-url');
 const userLogin = requireNonEmptyStringInput('user-login');
 const userPassword = requireNonEmptyStringInput('user-password');
+const failOnUnhealthy = String(core.getInput('fail-on-unhealthy')) === 'true';
 
 
 const main = async () => {
@@ -32,6 +33,8 @@ const main = async () => {
   }
   
   await printHealth(`Application ${appName}`, app.status.health);
+  core.setOutput("app-health", app.status.health.status);
+
   if (app.status.health.status !== HealthStatus.Healthy) {
 
     // app.status.resources.forEach(async (resource) => {
@@ -70,6 +73,10 @@ const main = async () => {
           }
         }
       }
+    }
+
+    if (failOnUnhealthy) {
+      core.setFailed(`Application ${appName} is not healthy`);
     }
 
   }
