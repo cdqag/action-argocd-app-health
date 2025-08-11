@@ -1,5 +1,5 @@
 name: ArgoCD Application Health Check
-description: This GitHub Action prints given log file line by line, tries to parse it, and adds proper annotations to the lines.
+description: A GitHub Action that monitors and reports the health status of ArgoCD applications, providing detailed diagnostics for unhealthy resources including events, pod logs, and intelligent log parsing.
 
 author: CDQ AG
 branding:
