@@ -1,6 +1,6 @@
 # ArgoCD Application Health Check
 
-A GitHub Action that monitors and reports the health status of ArgoCD applications, providing detailed diagnostics for unhealthy resources including events, pod logs, and intelligent log parsing.
+A GitHub Action that reports the health status of ArgoCD applications, providing detailed diagnostics for unhealthy resources including events, pod logs, and intelligent log parsing.
 
 ## Features
 
