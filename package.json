@@ -1,7 +1,7 @@
 {
   "name": "action-argocd-app-health",
   "version": "0.1.0",
-  "description": "Action Log Parser",
+  "description": "Reports the health status of ArgoCD applications, providing detailed diagnostics for unhealthy resources including events.",
   "main": "",
   "scripts": {
     "lint": "eslint 'src/**.ts'",
