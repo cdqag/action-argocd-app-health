@@ -32,5 +32,5 @@ outputs:
     description: 'Health status of the application'
 
 runs:
-  using: node20
+  using: node24
   main: dist/main.js
