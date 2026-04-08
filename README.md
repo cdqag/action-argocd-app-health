@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check ArgoCD Application Health
-        uses: cdqag/action-argocd-app-health@v1
+        uses: cdqag/action-argocd-app-health@v2
         with:
           app-name: 'my-application'
           server-url: 'https://argocd.example.com'
